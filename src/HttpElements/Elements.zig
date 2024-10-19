@@ -89,9 +89,9 @@ pub const DivElement = struct {
         const self = @as(*DivElement, @fieldParentPtr("baseHttpElement", iBaseHttpElement));
 
         if (self.content) |_| {
-            return self.content.?.toHttpString();
+            return std.fmt.allocPrint(std.heap.page_allocator, "<div>{s}</div", .{try self.content.?.toHttpString()});
         } else {
-            return "";
+            return "<div></div>";
         }
     }
 };
