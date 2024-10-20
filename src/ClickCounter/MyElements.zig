@@ -1,5 +1,5 @@
 const std = @import("std");
-const BaseElements = @import("../HttpElements//Elements.zig");
+const BaseElements = @import("../HtmlElements/Elements.zig");
 const BaseHttpElement = BaseElements.BaseHttpElement;
 
 pub const CustomBodyElement = struct {

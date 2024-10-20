@@ -1,54 +1,59 @@
-// Zig version 0.14.0
 const std = @import("std");
 const net = std.net;
 const http = std.http;
-const HttpElements = @import("HttpElements//Elements.zig");
+const HtmlElements = @import("HtmlElements//Elements.zig");
 const MyElements = @import("ClickCounter//MyElements.zig");
 const StringUtils = @import("Utils/StringUtils.zig").StringUtils;
+const Routes = @import("Routes.zig");
+const RouteHandler = Routes.RouteHandler;
+const Server = @import("Server.zig");
 
 pub fn main() !void {
-    const addr = net.Address.parseIp4("127.0.0.1", 9091) catch |err| {
-        std.debug.print("An error occurred while resolving the IP address: {}\n", .{err});
-        return;
+    try start_server();
+}
+
+fn init_routes() !RouteHandler {
+    var handler = RouteHandler{};
+
+    try handler.addRoute(.{ .method = http.Method.GET, .path = "/", .handler = loadHome });
+    try handler.addRoute(.{ .method = http.Method.POST, .path = "/incrementCounter", .handler = counterHandler });
+
+    return handler;
+}
+
+fn start_server() !void {
+    std.debug.print("Initializing routes\n", .{});
+
+    const routeHandler = init_routes() catch |err| switch (err) {
+        else => {
+            std.debug.panic("Failed to initialize routes! Error: {}", .{err});
+            return;
+        },
     };
 
-    var server = try addr.listen(.{});
+    const serverConfig = Server.ServerConfig{
+        .hostname = "127.0.0.1",
+        .port = 9091,
+        .routeHandler = routeHandler,
+    };
 
-    start_server(&server);
+    var server = Server.Server{
+        .config = serverConfig,
+    };
+
+    std.debug.print("Starting server\n", .{});
+    try server.startServer();
 }
 
-fn start_server(server: *net.Server) void {
-    std.debug.print("Starting server at port: {d}\n", .{server.listen_address.getPort()});
-    while (true) {
-        var connection = server.accept() catch |err| {
-            std.debug.print("Connection to client interrupted: {}\n", .{err});
-            continue;
-        };
-        defer connection.stream.close();
-
-        var read_buffer: [1024]u8 = undefined;
-        var http_server = http.Server.init(connection, &read_buffer);
-
-        var request = http_server.receiveHead() catch |err| {
-            std.debug.print("Could not read head: {}\n", .{err});
-            continue;
-        };
-        handle_request(&request) catch |err| {
-            std.debug.print("Could not handle request: {}", .{err});
-            continue;
-        };
-    }
-}
-
-fn loadHome() ![]const u8 {
+fn loadHome(request: *http.Server.Request) !void {
     var customBody = try MyElements.CustomBodyElement.init();
-    var body = [_]HttpElements.DivElement{
+    var body = [_]HtmlElements.DivElement{
         .{
             .content = &customBody.baseHttpElement,
         },
     };
 
-    var httpElement = HttpElements.HttpElement{
+    var httpElement = HtmlElements.HttpElement{
         .head = .{
             .title = .{
                 .value = "This is title",
@@ -59,31 +64,15 @@ fn loadHome() ![]const u8 {
         },
     };
 
-    return try std.fmt.allocPrint(std.heap.page_allocator, "{s}\n", .{try httpElement.baseHttpElement.toHttpString()});
+    const response = try std.fmt.allocPrint(std.heap.page_allocator, "{s}\n", .{try httpElement.baseHttpElement.toHttpString()});
+
+    try request.respond(response, .{});
 }
 
-const PathHandlerError = error{
-    PathNotFound,
-};
+fn counterHandler(request: *http.Server.Request) !void {
+    try MyElements.CustomBodyElement.incrementCounter();
 
-fn pathHandler(request: *http.Server.Request) ![]const u8 {
-    if (StringUtils.equal(request.head.target, "/")) {
-        return loadHome();
-    } else if (StringUtils.equal(request.head.target, "/count") and request.head.method == http.Method.PUT) {
-        try MyElements.CustomBodyElement.incrementCounter();
-        return "";
-    }
-
-    return PathHandlerError.PathNotFound;
-}
-
-fn handle_request(request: *http.Server.Request) !void {
-    std.debug.print("Handling request for {s}\n", .{request.head.target});
-
-    const responseData = pathHandler(request) catch |err| switch (err) {
-        PathHandlerError.PathNotFound => return try request.respond("", .{ .status = http.Status.not_found }),
-        else => return try request.respond("", .{ .status = http.Status.bad_request }),
-    };
-
-    try request.respond(responseData, .{});
+    try request.respond("", .{
+        .status = http.Status.no_content,
+    });
 }
