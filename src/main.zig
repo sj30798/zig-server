@@ -4,9 +4,12 @@ const http = std.http;
 const HtmlElements = @import("HtmlElements//Elements.zig");
 const MyElements = @import("ClickCounter//MyElements.zig");
 const StringUtils = @import("Utils/StringUtils.zig").StringUtils;
-const Routes = @import("Routes.zig");
+const Routes = @import("./ServerComponents/Routes.zig");
 const RouteHandler = Routes.RouteHandler;
-const Server = @import("Server.zig");
+const Server = @import("./ServerComponents/Server.zig");
+
+const HomeController = @import("controller/HomeController.zig").HomeController;
+const ClickCountController = @import("controller/ClickCountController.zig").ClickCountController;
 
 pub fn main() !void {
     try start_server();
@@ -15,8 +18,10 @@ pub fn main() !void {
 fn init_routes() !RouteHandler {
     var handler = RouteHandler{};
 
-    try handler.addRoute(.{ .method = http.Method.GET, .path = "/", .handler = loadHome });
-    try handler.addRoute(.{ .method = http.Method.POST, .path = "/incrementCounter", .handler = counterHandler });
+    try handler.addRoute(.{ .method = http.Method.GET, .path = "/", .handler = HomeController.LoadHome });
+    try handler.addRoute(.{ .method = http.Method.POST, .path = "/counter/increment", .handler = ClickCountController.incrementCounter });
+    try handler.addRoute(.{ .method = http.Method.POST, .path = "/counter/decrement", .handler = ClickCountController.decrementCounter });
+    try handler.addRoute(.{ .method = http.Method.POST, .path = "/counter/reset", .handler = ClickCountController.resetCounter });
 
     return handler;
 }
@@ -43,36 +48,4 @@ fn start_server() !void {
 
     std.debug.print("Starting server\n", .{});
     try server.startServer();
-}
-
-fn loadHome(request: *http.Server.Request) !void {
-    var customBody = try MyElements.CustomBodyElement.init();
-    var body = [_]HtmlElements.DivElement{
-        .{
-            .content = &customBody.baseHttpElement,
-        },
-    };
-
-    var httpElement = HtmlElements.HttpElement{
-        .head = .{
-            .title = .{
-                .value = "This is title",
-            },
-        },
-        .body = .{
-            .content = &body,
-        },
-    };
-
-    const response = try std.fmt.allocPrint(std.heap.page_allocator, "{s}\n", .{try httpElement.baseHttpElement.toHttpString()});
-
-    try request.respond(response, .{});
-}
-
-fn counterHandler(request: *http.Server.Request) !void {
-    try MyElements.CustomBodyElement.incrementCounter();
-
-    try request.respond("", .{
-        .status = http.Status.no_content,
-    });
 }

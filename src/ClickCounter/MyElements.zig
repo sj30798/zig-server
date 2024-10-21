@@ -2,6 +2,8 @@ const std = @import("std");
 const BaseElements = @import("../HtmlElements/Elements.zig");
 const BaseHttpElement = BaseElements.BaseHttpElement;
 
+const ClickCounter = @import("../models/ClickCounter.zig").ClickCounter;
+
 pub const CustomBodyElement = struct {
     clickButton: BaseElements.ButtonElement,
     buttonCounter: BaseElements.Paragraph,
@@ -10,10 +12,8 @@ pub const CustomBodyElement = struct {
         .toHttpStringFn = toHttpString,
     },
 
-    var buttonClickCount: i32 = 0;
-
     pub fn init() !CustomBodyElement {
-        const buttonCounterText = try std.fmt.allocPrint(std.heap.page_allocator, "Button has been clicked {d} times!", .{CustomBodyElement.buttonClickCount});
+        const buttonCounterText = try std.fmt.allocPrint(std.heap.page_allocator, "Button has been clicked {d} times!", .{ClickCounter.GetCounter()});
 
         return .{
             .clickButton = .{
